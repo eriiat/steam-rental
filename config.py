@@ -4,8 +4,8 @@ import os
 class Config:
     # MySQL配置
     MYSQL_HOST = 'localhost'
-    MYSQL_USER = 'root'
-    MYSQL_PASSWORD = '123456'
+    MYSQL_USER = 'eriiat'
+    MYSQL_PASSWORD = 'qesd2341*D531'
     MYSQL_DB = 'steam_rental'
 
     # 加密密钥
