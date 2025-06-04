@@ -1,0 +1,32 @@
+# Flask Web框架
+Flask==2.3.2
+
+# MySQL数据库连接
+PyMySQL==1.0.2
+
+# 动态令牌生成 (用于Steam验证码)
+pyotp==2.8.0
+
+# 加密库 (用于保护敏感数据)
+cryptography==39.0.1
+
+# User-Agent解析 (用于安全日志)
+user-agents==2.2.0
+
+# 日期时间处理
+python-dateutil==2.8.2
+
+# 环境变量管理 (推荐用于生产环境)
+python-dotenv==1.0.0
+
+# HTTP请求库 (用于未来扩展)
+requests==2.31.0
+
+# 日志管理
+loguru==0.7.0
+
+# WSGI服务器 (用于生产部署)
+gunicorn==20.1.0
+
+# MySQL连接池 (提高数据库性能)
+DBUtils==3.0.2
