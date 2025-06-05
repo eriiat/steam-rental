@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>管理仪表盘</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .admin-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .admin-header {
+            background: #2c3e50;
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        .admin-header h1 {
+            margin: 0;
+            text-align: center;
+        }
+
+        .stats-container {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 20px;
+            width: 30%;
+            text-align: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .stat-card h3 {
+            margin-top: 0;
+            color: #2c3e50;
+        }
+
+        .stat-card p {
+            font-size: 24px;
+            font-weight: bold;
+            margin: 10px 0;
+            color: #3498db;
+        }
+
+        .admin-nav {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .admin-nav a {
+            display: inline-block;
+            margin: 0 10px;
+            padding: 10px 15px;
+            background: #3498db;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+        }
+
+        .admin-nav a:hover {
+            background: #2980b9;
+        }
+
+        .system-info {
+            background: #f9f9f9;
+            padding: 20px;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <div class="admin-header">
+            <h1>Steam租赁系统管理后台</h1>
+        </div>
+
+        <div class="admin-nav">
+            <a href="{{ url_for('admin_dashboard') }}">仪表盘</a>
+            <a href="{{ url_for('admin_accounts') }}">账号管理</a>
+            <a href="{{ url_for('admin_orders') }}">订单管理</a>
+            <a href="{{ url_for('admin_logout') }}">退出</a>
+        </div>
+
+        <div class="stats-container">
+            <div class="stat-card">
+                <h3>总订单数</h3>
+                <p>{{ total_orders }}</p>
+            </div>
+            <div class="stat-card">
+                <h3>活跃订单</h3>
+                <p>{{ active_orders }}</p>
+            </div>
+            <div class="stat-card">
+                <h3>账号总数</h3>
+                <p>{{ total_accounts }}</p>
+            </div>
+        </div>
+
+        <div class="system-info">
+            <h3>系统信息：</h3>
+            <p>当前时间：{{ now.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+            <p>租赁天数：{{ RENTAL_DAYS }}天</p>
+            <p>最大访问次数：{{ MAX_ACCESS }}次</p>
+        </div>
+    </div>
+</body>
+</html>
