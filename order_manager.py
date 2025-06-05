@@ -52,6 +52,68 @@ class OrderManager:
         finally:
             conn.close()
 
+    def update_order_expiry(self, order_id, new_expire_days):
+        """更新订单有效期"""
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                # 获取当前到期时间
+                cursor.execute("SELECT expire_time FROM orders WHERE order_id = %s", (order_id,))
+                result = cursor.fetchone()
+
+                if not result:
+                    return False, "未找到订单"
+
+                # 计算新的到期时间
+                current_expire = result['expire_time']
+                if current_expire < datetime.now():
+                    # 如果订单已过期，从当前时间开始计算
+                    new_expire_time = datetime.now() + timedelta(days=new_expire_days)
+                else:
+                    # 否则从原到期时间开始计算
+                    new_expire_time = current_expire + timedelta(days=new_expire_days)
+
+                # 更新订单
+                update_sql = """
+                UPDATE orders 
+                SET expire_time = %s 
+                WHERE order_id = %s
+                """
+                cursor.execute(update_sql, (new_expire_time, order_id))
+                conn.commit()
+
+                return True, new_expire_time
+        except Exception as e:
+            print(f"更新订单有效期失败: {str(e)}")
+            return False, str(e)
+        finally:
+            conn.close()
+
+    def update_order_status(self, order_id, new_status):
+        """更新订单状态"""
+        if new_status not in ['active', 'disabled', 'completed']:
+            return False, "无效的状态值"
+
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                update_sql = """
+                UPDATE orders 
+                SET status = %s 
+                WHERE order_id = %s
+                """
+                cursor.execute(update_sql, (new_status, order_id))
+                conn.commit()
+
+                if cursor.rowcount > 0:
+                    return True, "订单状态更新成功"
+                return False, "未找到指定订单"
+        except Exception as e:
+            print(f"更新订单状态失败: {str(e)}")
+            return False, str(e)
+        finally:
+            conn.close()
+
     def get_available_account(self):
         """获取可用账号"""
         conn = self.get_connection()
@@ -116,3 +178,4 @@ class OrderManager:
                 return cursor.rowcount
         finally:
             conn.close()
+

@@ -1,5 +1,7 @@
-from flask import Flask, render_template, request, redirect, url_for, session
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 import pymysql
+from dotenv import load_dotenv
+load_dotenv()  # 显式加载.env文件
 from config import Config
 # import pyotp
 from steam_guard import generate_steam_guard_code
@@ -12,7 +14,6 @@ import datetime as dt
 app = Flask(__name__)
 app.config.from_object(Config)
 app.secret_key = app.config['SECRET_KEY']
-
 # 初始化加密器
 cipher_suite = Fernet(app.config['ENCRYPTION_KEY'])
 
@@ -44,6 +45,7 @@ def decrypt_data(encrypted_data):
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
+
     if request.method == 'POST':
         order_id = request.form['order_id'].strip()
         client_ip = request.remote_addr
@@ -115,8 +117,20 @@ def index():
             return render_template('error.html', message="系统错误，请稍后再试")
         finally:
             conn.close()
+    announcement = None
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT message FROM announcements WHERE is_active = 1 ORDER BY create_time DESC LIMIT 1")
+            result = cursor.fetchone()
+            if result:
+                announcement = result['message']
+    except Exception as e:
+        print(f"获取公告时出错: {str(e)}")
+    finally:
+        conn.close()
 
-    return render_template('index.html')
+    return render_template('index.html', announcement=announcement)
 
 
 # 管理员登录
@@ -212,6 +226,70 @@ def admin_add_account():
                                accounts=account_mgr.get_accounts(),
                                error="添加账号失败")
 
+
+# 添加新订单
+@app.route('/admin/orders/add', methods=['POST'])
+def admin_add_order():
+    if not session.get('admin_logged_in'):
+        return redirect(url_for('admin_login'))
+
+    order_id = request.form.get('order_id')
+    customer_contact = request.form.get('customer_contact')
+    rental_days = int(request.form.get('rental_days', app.config['RENTAL_DAYS']))
+
+    if not order_id or not customer_contact:
+        return jsonify({"success": False, "message": "订单号和客户联系方式不能为空"}), 400
+
+    success, result = order_mgr.create_order(order_id, customer_contact, rental_days)
+
+    if success:
+        return jsonify({"success": True, "message": "订单添加成功", "account_id": result})
+    else:
+        return jsonify({"success": False, "message": result}), 500
+
+
+# 更新订单有效期
+@app.route('/admin/orders/update-expiry', methods=['POST'])
+def admin_update_order_expiry():
+    if not session.get('admin_logged_in'):
+        return redirect(url_for('admin_login'))
+
+    order_id = request.form.get('order_id')
+    new_expire_days = int(request.form.get('new_expire_days', 7))
+
+    if not order_id:
+        return jsonify({"success": False, "message": "订单号不能为空"}), 400
+
+    success, result = order_mgr.update_order_expiry(order_id, new_expire_days)
+
+    if success:
+        return jsonify({
+            "success": True,
+            "message": "订单有效期更新成功",
+            "new_expire_time": result.strftime('%Y-%m-%d %H:%M')
+        })
+    else:
+        return jsonify({"success": False, "message": result}), 500
+
+
+# 更新订单状态
+@app.route('/admin/orders/update-status', methods=['POST'])
+def admin_update_order_status():
+    if not session.get('admin_logged_in'):
+        return redirect(url_for('admin_login'))
+
+    order_id = request.form.get('order_id')
+    new_status = request.form.get('new_status', 'active')
+
+    if not order_id:
+        return jsonify({"success": False, "message": "订单号不能为空"}), 400
+
+    success, message = order_mgr.update_order_status(order_id, new_status)
+
+    if success:
+        return jsonify({"success": True, "message": message})
+    else:
+        return jsonify({"success": False, "message": message}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

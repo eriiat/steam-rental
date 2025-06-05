@@ -7,6 +7,15 @@
 <body>
     <div class="container">
         <h1>Steam账号提取</h1>
+
+        <!-- 添加公告区域 -->
+        {% if announcement %}
+        <div class="announcement-box">
+            <h3>系统公告</h3>
+            <p>{{ announcement }}</p>
+        </div>
+        {% endif %}
+
         <form method="POST">
             <div class="form-group">
                 <label for="order_id">请输入闲鱼订单号：</label>
