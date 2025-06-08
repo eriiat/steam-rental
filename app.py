@@ -11,6 +11,7 @@ from account_manager import AccountManager
 from order_manager import OrderManager
 import datetime as dt
 
+import codecs
 app = Flask(__name__)
 app.config.from_object(Config)
 app.secret_key = app.config['SECRET_KEY']
@@ -114,11 +115,11 @@ def index():
                 # 更新账号最后使用时间
                 account_update = "UPDATE steam_accounts SET last_used = %s WHERE account_id = %s"
                 cursor.execute(account_update, (current_time, order['account_id']))
-
                 conn.commit()
-
                 # 生成动态令牌
-                totp = generate_steam_guard_code(order['steam_shared_secret'])
+                d = order['steam_shared_secret']
+                d_decoded = codecs.decode(d, 'unicode_escape')
+                totp = generate_steam_guard_code(d_decoded)
                 auth_code = totp
 
                 # 解密账号密码
