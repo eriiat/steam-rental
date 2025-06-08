@@ -18,31 +18,26 @@ class OrderManager:
             cursorclass=pymysql.cursors.DictCursor
         )
 
-    def create_order(self, order_id, customer_contact, rental_days=Config.RENTAL_DAYS):
-        """创建新订单"""
+    def create_order(self, order_id,game_name, customer_contact, rental_days=Config.RENTAL_DAYS):
+        """创建新订单（不设置开始时间）"""
         conn = self.get_connection()
         try:
             # 获取可用账号
-            account = self.get_available_account()
-
+            account = self.get_available_account(game_name)
             if not account:
                 return False, "没有可用账号"
 
             with conn.cursor() as cursor:
-                start_time = datetime.now()
-                expire_time = start_time + timedelta(days=rental_days)
-
                 sql = """
                 INSERT INTO orders 
-                (order_id, account_id, customer_contact, start_time, expire_time)
-                VALUES (%s, %s, %s, %s, %s)
+                (order_id, account_id, customer_contact, rental_days, status)
+                VALUES (%s, %s, %s, %s, 'pending')
                 """
                 cursor.execute(sql, (
                     order_id,
                     account['account_id'],
                     customer_contact,
-                    start_time,
-                    expire_time
+                    rental_days
                 ))
                 conn.commit()
                 return True, account['account_id']
@@ -57,28 +52,30 @@ class OrderManager:
         conn = self.get_connection()
         try:
             with conn.cursor() as cursor:
-                # 获取当前到期时间
-                cursor.execute("SELECT expire_time FROM orders WHERE order_id = %s", (order_id,))
+                # 获取订单当前信息
+                cursor.execute("SELECT start_time, expire_time, rental_days, status FROM orders WHERE order_id = %s",
+                               (order_id,))
                 result = cursor.fetchone()
 
                 if not result:
                     return False, "未找到订单"
 
-                # 计算新的到期时间
+                # 如果订单尚未激活（pending状态）
+                if result['status'] == 'pending':
+                    # 只更新租赁天数
+                    update_sql = "UPDATE orders SET rental_days = %s WHERE order_id = %s"
+                    cursor.execute(update_sql, (new_expire_days, order_id))
+                    conn.commit()
+                    return True, f"订单租赁天数已更新为 {new_expire_days} 天（将在首次使用时生效）"
+
+                # 如果订单已激活
                 current_expire = result['expire_time']
                 if current_expire < datetime.now():
-                    # 如果订单已过期，从当前时间开始计算
                     new_expire_time = datetime.now() + timedelta(days=new_expire_days)
                 else:
-                    # 否则从原到期时间开始计算
                     new_expire_time = current_expire + timedelta(days=new_expire_days)
 
-                # 更新订单
-                update_sql = """
-                UPDATE orders 
-                SET expire_time = %s 
-                WHERE order_id = %s
-                """
+                update_sql = "UPDATE orders SET expire_time = %s WHERE order_id = %s"
                 cursor.execute(update_sql, (new_expire_time, order_id))
                 conn.commit()
 
@@ -114,28 +111,32 @@ class OrderManager:
         finally:
             conn.close()
 
-    def get_available_account(self):
-        """获取可用账号"""
+    def get_available_account(self, game_name):
+        """获取指定游戏的可用账号"""
         conn = self.get_connection()
         try:
             with conn.cursor() as cursor:
-                # 获取最近未使用的可用账号
+                # 获取最近未使用的可用账号（按最后使用时间升序）
                 sql = """
-                SELECT * FROM steam_accounts 
-                WHERE is_active = TRUE 
-                AND account_id NOT IN (
-                    SELECT account_id FROM orders 
-                    WHERE expire_time > %s AND status = 'active'
-                )
-                ORDER BY last_used ASC 
+                SELECT sa.* 
+                FROM steam_accounts sa
+                INNER JOIN account_games ag ON sa.account_id = ag.account_id
+                INNER JOIN games g ON ag.game_id = g.game_id
+                WHERE g.game_name = %s 
+                  AND sa.is_active = TRUE 
+                  AND sa.account_id NOT IN (
+                      SELECT account_id 
+                      FROM orders 
+                      WHERE status = 'active' OR status = 'pending'
+                  )
+                ORDER BY sa.last_used ASC 
                 LIMIT 1
                 """
-                cursor.execute(sql, (datetime.now(),))
+                cursor.execute(sql, (game_name,))
                 account = cursor.fetchone()
 
                 if account:
-                    # 解密部分信息
-                    account['steam_username'] = self.account_mgr.decrypt_data(account['steam_username'])
+                    # 解密密码（共享密钥保持加密状态）
                     account['steam_password'] = self.account_mgr.decrypt_data(account['steam_password'])
                 return account
         finally:
@@ -157,7 +158,7 @@ class OrderManager:
 
                 # 解密账号信息
                 for order in orders:
-                    order['steam_username'] = self.account_mgr.decrypt_data(order['steam_username'])
+                    order['steam_username'] = order['steam_username']
                 return orders
         finally:
             conn.close()
@@ -178,4 +179,3 @@ class OrderManager:
                 return cursor.rowcount
         finally:
             conn.close()
-

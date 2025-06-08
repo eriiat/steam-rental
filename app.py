@@ -45,7 +45,6 @@ def decrypt_data(encrypted_data):
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
-
     if request.method == 'POST':
         order_id = request.form['order_id'].strip()
         client_ip = request.remote_addr
@@ -68,6 +67,27 @@ def index():
 
                 # 检查订单状态
                 current_time = datetime.datetime.now()
+
+                # 如果是首次使用（pending状态），设置开始时间和过期时间
+                if order['status'] == 'pending':
+                    start_time = current_time
+                    expire_time = start_time + datetime.timedelta(days=order['rental_days'])
+
+                    # 更新订单状态和时间
+                    update_sql = """
+                    UPDATE orders 
+                    SET start_time = %s, expire_time = %s, status = 'active'
+                    WHERE order_id = %s
+                    """
+                    cursor.execute(update_sql, (start_time, expire_time, order_id))
+                    conn.commit()
+
+                    # 更新order变量的时间信息
+                    order['start_time'] = start_time
+                    order['expire_time'] = expire_time
+                    order['status'] = 'active'
+
+                # 检查订单是否过期
                 if current_time > order['expire_time']:
                     # 更新订单状态为过期
                     update_sql = "UPDATE orders SET status = 'expired' WHERE order_id = %s"
@@ -102,7 +122,7 @@ def index():
                 auth_code = totp
 
                 # 解密账号密码
-                username = decrypt_data(order['steam_username'])
+                username = order['steam_username']
                 password = decrypt_data(order['steam_password'])
 
                 return render_template('result.html',
@@ -117,6 +137,8 @@ def index():
             return render_template('error.html', message="系统错误，请稍后再试")
         finally:
             conn.close()
+
+    # GET请求处理（显示首页和公告）
     announcement = None
     conn = get_db_connection()
     try:
@@ -189,14 +211,6 @@ def admin_dashboard():
         conn.close()
 
 
-# 账号管理
-@app.route('/admin/accounts')
-def admin_accounts():
-    if not session.get('admin_logged_in'):
-        return redirect(url_for('admin_login'))
-
-    accounts = account_mgr.get_accounts()
-    return render_template('admin/accounts.html', accounts=accounts)
 
 
 # 订单管理
@@ -208,8 +222,21 @@ def admin_orders():
     orders = order_mgr.get_orders()
     return render_template('admin/orders.html', orders=orders)
 
+# 账号管理
+@app.route('/admin/accounts')
+def admin_accounts():
+    if not session.get('admin_logged_in'):
+        return redirect(url_for('admin_login'))
 
-# 添加账号
+    # 获取所有账号（带游戏信息）
+    accounts = account_mgr.get_accounts(with_games=True)
+
+    # 获取所有游戏列表
+    games = account_mgr.get_all_games()
+
+    return render_template('admin/accounts.html', accounts=accounts, games=games)
+
+# 添加账号（修改版，支持游戏关联）
 @app.route('/admin/add_account', methods=['POST'])
 def admin_add_account():
     if not session.get('admin_logged_in'):
@@ -219,14 +246,84 @@ def admin_add_account():
     password = request.form['password']
     shared_secret = request.form['shared_secret']
 
-    if account_mgr.add_account(username, password, shared_secret):
+    # 获取选择的游戏（支持多选）
+    game_names = request.form.getlist('games')
+
+    # 添加账号并关联游戏
+    if account_mgr.add_account(username, password, shared_secret, game_names):
         return redirect(url_for('admin_accounts'))
     else:
+        # 添加失败时，重新加载页面并显示错误
+        accounts = account_mgr.get_accounts(with_games=True)
+        games = account_mgr.get_all_games()
         return render_template('admin/accounts.html',
-                               accounts=account_mgr.get_accounts(),
+                               accounts=accounts,
+                               games=games,
                                error="添加账号失败")
 
 
+# 编辑账号页面
+@app.route('/admin/edit_account/<int:account_id>')
+def admin_edit_account(account_id):
+    if not session.get('admin_logged_in'):
+        return redirect(url_for('admin_login'))
+
+    # 获取账号详情（包含游戏信息）
+    account = account_mgr.get_account(account_id)
+    if not account:
+        return redirect(url_for('admin_accounts'))
+
+    # 获取所有游戏列表
+    games = account_mgr.get_all_games()
+
+    return render_template('admin/edit_account.html',
+                           account=account,
+                           games=games)
+
+
+# 更新账号信息
+@app.route('/admin/update_account/<int:account_id>', methods=['POST'])
+def admin_update_account(account_id):
+    if not session.get('admin_logged_in'):
+        return redirect(url_for('admin_login'))
+
+    username = request.form['username']
+    password = request.form['password']
+    shared_secret = request.form['shared_secret']
+    is_active = request.form.get('is_active', '0') == '1'
+
+    # 获取选择的游戏
+    game_names = request.form.getlist('games')
+
+    if account_mgr.update_account_games(
+            account_id,
+            password,
+            shared_secret,
+            is_active,
+            game_names
+    ):
+        return redirect(url_for('admin_accounts'))
+    else:
+        account = account_mgr.get_account(account_id)
+        games = account_mgr.get_all_games()
+        return render_template('admin/edit_account.html',
+                               account=account,
+                               games=games,
+                               error="更新账号失败")
+
+
+# 删除账号
+@app.route('/admin/delete_account/<int:account_id>', methods=['POST'])
+def admin_delete_account(account_id):
+    if not session.get('admin_logged_in'):
+        return redirect(url_for('admin_login'))
+
+    result = account_mgr.delete_account(account_id)
+
+    if result['success']:
+        return jsonify({"success": True, "message": result['message']})
+    else:
+        return jsonify({"success": False, "message": result['message']}), 400
 # 添加新订单
 @app.route('/admin/orders/add', methods=['POST'])
 def admin_add_order():
@@ -235,12 +332,13 @@ def admin_add_order():
 
     order_id = request.form.get('order_id')
     customer_contact = request.form.get('customer_contact')
+    game_name = request.form.get('game_name')
     rental_days = int(request.form.get('rental_days', app.config['RENTAL_DAYS']))
 
     if not order_id or not customer_contact:
         return jsonify({"success": False, "message": "订单号和客户联系方式不能为空"}), 400
 
-    success, result = order_mgr.create_order(order_id, customer_contact, rental_days)
+    success, result = order_mgr.create_order(order_id, game_name, customer_contact, rental_days)
 
     if success:
         return jsonify({"success": True, "message": "订单添加成功", "account_id": result})
@@ -248,7 +346,7 @@ def admin_add_order():
         return jsonify({"success": False, "message": result}), 500
 
 
-# 更新订单有效期
+# 更新订单有效期路由
 @app.route('/admin/orders/update-expiry', methods=['POST'])
 def admin_update_order_expiry():
     if not session.get('admin_logged_in'):
@@ -263,11 +361,15 @@ def admin_update_order_expiry():
     success, result = order_mgr.update_order_expiry(order_id, new_expire_days)
 
     if success:
-        return jsonify({
-            "success": True,
-            "message": "订单有效期更新成功",
-            "new_expire_time": result.strftime('%Y-%m-%d %H:%M')
-        })
+        # 处理不同类型的结果
+        if isinstance(result, datetime.datetime):
+            return jsonify({
+                "success": True,
+                "message": "订单有效期更新成功",
+                "new_expire_time": result.strftime('%Y-%m-%d %H:%M')
+            })
+        else:
+            return jsonify({"success": True, "message": result})
     else:
         return jsonify({"success": False, "message": result}), 500
 

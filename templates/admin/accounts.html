@@ -91,6 +91,78 @@
             color: #ff0000;
             margin-bottom: 15px;
         }
+
+        /* 新增样式 */
+        .games-container {
+            max-height: 150px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+
+        .game-tag {
+            display: inline-block;
+            background-color: #3498db;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 3px;
+            margin: 2px;
+            font-size: 0.9em;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 0.9em;
+        }
+
+        .status-active {
+            background-color: #27ae60;
+            color: white;
+        }
+
+        .status-inactive {
+            background-color: #e74c3c;
+            color: white;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 5px;
+        }
+
+        .action-btn {
+            padding: 5px 10px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+
+        .btn-edit {
+            background-color: #3498db;
+            color: white;
+        }
+
+        .btn-delete {
+            background-color: #e74c3c;
+            color: white;
+        }
+
+        .games-selection {
+            margin-top: 15px;
+        }
+
+        .games-selection h4 {
+            margin-bottom: 10px;
+        }
+
+        .form-check {
+            margin-bottom: 5px;
+        }
     </style>
 </head>
 <body>
@@ -119,6 +191,8 @@
                     <th>最后使用时间</th>
                     <th>密码设置</th>
                     <th>状态</th>
+                    <th>关联游戏</th>
+                    <th>操作</th>
                 </tr>
             </thead>
             <tbody>
@@ -128,7 +202,30 @@
                     <td>{{ account.steam_username }}</td>
                     <td>{{ account.last_used.strftime('%Y-%m-%d %H:%M') if account.last_used else '从未使用' }}</td>
                     <td>{{ account.password_set }}</td>
-                    <td>{{ '激活' if account.is_active else '禁用' }}</td>
+                    <td>
+                        {% if account.is_active %}
+                            <span class="status-badge status-active">激活</span>
+                        {% else %}
+                            <span class="status-badge status-inactive">禁用</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if account.games %}
+                            <div class="games-container">
+                                {% for game in account.games %}
+                                    <span class="game-tag">{{ game }}</span>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            无
+                        {% endif %}
+                    </td>
+                    <td class="action-buttons">
+                        <a href="{{ url_for('admin_edit_account', account_id=account.account_id) }}"
+                           class="action-btn btn-edit">编辑</a>
+                        <button class="action-btn btn-delete"
+                                onclick="deleteAccount({{ account.account_id }})">删除</button>
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -153,11 +250,69 @@
                         <input type="text" id="shared_secret" name="shared_secret" required>
                     </div>
                     <div class="form-group">
+                        <label>&nbsp;</label>
                         <button type="submit">添加账号</button>
+                    </div>
+                </div>
+
+                <!-- 新增：游戏选择区域 -->
+                <div class="games-selection">
+                    <h4>关联游戏（可多选）</h4>
+                    <div class="games-container">
+                        {% for game in games %}
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="games"
+                                   value="{{ game.game_name }}" id="game-{{ game.game_id }}">
+                            <label class="form-check-label" for="game-{{ game.game_id }}">
+                                {{ game.game_name }}
+                            </label>
+                        </div>
+                        {% endfor %}
+                        <div class="form-check">
+                          <input class="form-check-input" type="checkbox" id="game-other">
+                          <label class="form-check-label" for="game-other">其他</label>
+                          <input type="text" id="game-other-input" name="games" placeholder="请输入游戏名称" style="display: none;">
+                        </div>
                     </div>
                 </div>
             </form>
         </div>
     </div>
+
+    <script>
+        function deleteAccount(accountId) {
+            if (confirm('确定要删除此账号吗？此操作不可撤销！')) {
+                fetch("{{ url_for('admin_delete_account', account_id=0) }}".replace('0', accountId), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert(data.message);
+                        window.location.reload();
+                    } else {
+                        alert('删除失败: ' + data.message);
+                    }
+                });
+            }
+        };
+        document.addEventListener('DOMContentLoaded', function () {
+          const otherCheckbox = document.getElementById('game-other');
+          const otherInput = document.getElementById('game-other-input');
+
+          otherCheckbox.addEventListener('change', function () {
+            if (this.checked) {
+              otherInput.style.display = 'inline-block';
+              otherInput.focus();
+            } else {
+              otherInput.style.display = 'none';
+              otherInput.value = '';
+            }
+          });
+        });
+    </script>
 </body>
 </html>

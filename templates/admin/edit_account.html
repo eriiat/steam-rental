@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>编辑账号</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .admin-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .admin-header {
+            background: #2c3e50;
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        .admin-header h1 {
+            margin: 0;
+            text-align: center;
+        }
+
+        .admin-nav {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .admin-nav a {
+            display: inline-block;
+            margin: 0 10px;
+            padding: 10px 15px;
+            background: #3498db;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+        }
+
+        .admin-nav a:hover {
+            background: #2980b9;
+        }
+
+        .edit-account-form {
+            background: #f9f9f9;
+            padding: 20px;
+            border-radius: 5px;
+        }
+
+        .form-row {
+            display: flex;
+            margin-bottom: 15px;
+        }
+
+        .form-group {
+            flex: 1;
+            margin-right: 15px;
+        }
+
+        .form-group:last-child {
+            margin-right: 0;
+        }
+
+        .error {
+            color: #ff0000;
+            margin-bottom: 15px;
+        }
+
+        .games-container {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+
+        .status-checkbox {
+            margin-top: 25px;
+        }
+
+        .action-buttons {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <div class="admin-header">
+            <h1>编辑Steam账号</h1>
+        </div>
+
+        <div class="admin-nav">
+            <a href="{{ url_for('admin_dashboard') }}">仪表盘</a>
+            <a href="{{ url_for('admin_accounts') }}">账号管理</a>
+            <a href="{{ url_for('admin_orders') }}">订单管理</a>
+            <a href="{{ url_for('admin_logout') }}">退出</a>
+        </div>
+
+        {% if error %}
+            <div class="error">{{ error }}</div>
+        {% endif %}
+
+        <div class="edit-account-form">
+            <form method="POST" action="{{ url_for('admin_update_account', account_id=account.account_id) }}">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="username">用户名：</label>
+                        <input type="text" id="username" name="username"
+                               value="{{ account.steam_username }}" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">密码：</label>
+                        <input type="text" id="password" name="password"
+                               placeholder="输入新密码（留空则不修改）">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="shared_secret">共享密钥：</label>
+                        <input type="text" id="shared_secret" name="shared_secret"
+                               value="{{ account.steam_shared_secret }}" required>
+                    </div>
+                    <div class="form-group status-checkbox">
+                        <input type="checkbox" id="is_active" name="is_active" value="1"
+                               {% if account.is_active %}checked{% endif %}>
+                        <label for="is_active">账号可用</label>
+                    </div>
+                </div>
+
+                <h3>关联游戏</h3>
+                <div class="games-container">
+                    {% for game in games %}
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="games"
+                               value="{{ game.game_name }}" id="game-{{ game.game_id }}"
+                               {% if game.game_name in account.games %}checked{% endif %}>
+                        <label class="form-check-label" for="game-{{ game.game_id }}">
+                            {{ game.game_name }}
+                        </label>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <div class="action-buttons">
+                    <button type="submit" class="btn-primary">更新账号</button>
+                    <a href="{{ url_for('admin_accounts') }}" class="btn-secondary">返回列表</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</body>
+</html>
